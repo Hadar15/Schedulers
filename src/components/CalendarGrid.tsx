@@ -1,8 +1,8 @@
 import React from 'react';
-import { Event } from '../types';
-import { useRef } from 'react';
+import type { Event } from '../types/index';
 import EventBlock from './EventBlock';
 import { getTimeSlots } from '../utils';
+import { calculateEventLayout, EventWithLayout } from '../utils/eventLayout';
 
 interface CalendarGridProps {
   weekDays: string[];
@@ -58,7 +58,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             const currentTimeSlotHour = parseInt(timeSlot.split(':')[0]);
                           const eventsInSlot = events.filter(event => {
                 const startHour = parseInt(event.startTime.split(':')[0]);
-                const endHour = parseInt(event.endTime.split(':')[0]);
                 const currentHour = currentTimeSlotHour;
 
                 if (!event.isMultiDay) {
@@ -80,6 +79,10 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 
                 return false;
               });
+
+              // Calculate layout for overlapping events
+              const eventsWithLayout = calculateEventLayout(eventsInSlot, dayIndex);
+              
             return (
               <div
                 key={dayIndex}
@@ -87,12 +90,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 onClick={() => handleTimeSlotClick(dayIndex, timeSlot)}
                 onDoubleClick={() => handleTimeSlotDoubleClick(dayIndex, timeSlot)}
               >
-                {eventsInSlot.map((event: Event, index: number) => (
+                {eventsWithLayout.map((event: EventWithLayout) => (
                   <div 
                     key={event.id} 
                     style={{
-                      width: `${100 / eventsInSlot.length}%`,
-                      left: `${(index * 100) / eventsInSlot.length}%`,
+                      width: `${100 / event.totalColumns}%`,
+                      left: `${(event.column * 100) / event.totalColumns}%`,
                       position: 'absolute',
                       top: 0,
                       bottom: 0,
