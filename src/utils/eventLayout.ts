@@ -5,40 +5,65 @@ export interface EventWithLayout extends Event {
   totalColumns: number;
 }
 
+function normalizeDay(day: number): number {
+  return (day + 7) % 7;
+}
+
+function isInRange(value: number, start: number, end: number): boolean {
+  start = normalizeDay(start);
+  end = normalizeDay(end);
+  value = normalizeDay(value);
+
+  if (end >= start) {
+    return value >= start && value <= end;
+  } else {
+    // Handles wrap-around case (e.g., Sat-Sun-Mon)
+    return value >= start || value <= end;
+  }
+}
+
+function getTimeInMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + (minutes || 0);
+}
+
 function doEventsOverlap(event1: Event, event2: Event, dayIndex: number): boolean {
+  const day1Start = event1.startDayOfWeek;
+  const day1End = event1.endDayOfWeek;
+  const day2Start = event2.startDayOfWeek;
+  const day2End = event2.endDayOfWeek;
+
+  // Check if the current day is within both events' day ranges
+  const isDay1Range = isInRange(dayIndex, day1Start, day1End);
+  const isDay2Range = isInRange(dayIndex, day2Start, day2End);
+
+  if (!isDay1Range || !isDay2Range) {
+    return false;
+  }
+
+  // Get times in minutes for easier comparison
+  const time1Start = getTimeInMinutes(event1.startTime);
+  const time1End = getTimeInMinutes(event1.endTime);
+  const time2Start = getTimeInMinutes(event2.startTime);
+  const time2End = getTimeInMinutes(event2.endTime);
+
   // For same day events
-  if (!event1.isMultiDay && !event2.isMultiDay && event1.startDayOfWeek === event2.startDayOfWeek) {
-    const e1Start = parseInt(event1.startTime.split(':')[0]);
-    const e1End = parseInt(event1.endTime.split(':')[0]);
-    const e2Start = parseInt(event2.startTime.split(':')[0]);
-    const e2End = parseInt(event2.endTime.split(':')[0]);
-    
-    return !(e1End <= e2Start || e2End <= e1Start);
+  if (dayIndex === day1Start && dayIndex === day2Start) {
+    return !(time1End <= time2Start || time2End <= time1Start);
   }
 
-  // For multi-day events
-  if (dayIndex >= Math.min(event1.startDayOfWeek, event2.startDayOfWeek) &&
-      dayIndex <= Math.max(event1.endDayOfWeek, event2.endDayOfWeek)) {
-    
-    // If it's the start day for both events
-    if (dayIndex === event1.startDayOfWeek && dayIndex === event2.startDayOfWeek) {
-      const e1Start = parseInt(event1.startTime.split(':')[0]);
-      const e2Start = parseInt(event2.startTime.split(':')[0]);
-      return e1Start === e2Start;
-    }
-    
-    // If it's the end day for both events
-    if (dayIndex === event1.endDayOfWeek && dayIndex === event2.endDayOfWeek) {
-      const e1End = parseInt(event1.endTime.split(':')[0]);
-      const e2End = parseInt(event2.endTime.split(':')[0]);
-      return e1End === e2End;
-    }
-    
-    // If one event starts and another continues
-    return true;
+  // For the start day of event1
+  if (dayIndex === day1Start) {
+    return time1Start <= time2End;
   }
 
-  return false;
+  // For the start day of event2
+  if (dayIndex === day2Start) {
+    return time2Start <= time1End;
+  }
+
+  // For middle days or end days
+  return true;
 }
 
 function groupOverlappingEvents(events: Event[], dayIndex: number): Event[][] {

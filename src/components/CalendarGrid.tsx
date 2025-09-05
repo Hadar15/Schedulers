@@ -56,9 +56,28 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           {/* Day columns */}
           {weekDays.map((_, dayIndex) => {
             const currentTimeSlotHour = parseInt(timeSlot.split(':')[0]);
-                          const eventsInSlot = events.filter(event => {
+                          const normalizeDay = (day: number) => (day + 7) % 7;
+              
+              const isInRange = (value: number, start: number, end: number) => {
+                start = normalizeDay(start);
+                end = normalizeDay(end);
+                value = normalizeDay(value);
+
+                if (end >= start) {
+                  return value >= start && value <= end;
+                } else {
+                  // Handles wrap-around case (e.g., Sat-Sun-Mon)
+                  return value >= start || value <= end;
+                }
+              };
+
+              const eventsInSlot = events.filter(event => {
                 const startHour = parseInt(event.startTime.split(':')[0]);
                 const currentHour = currentTimeSlotHour;
+
+                // Check if current day is in the event's day range
+                const isDayInRange = isInRange(dayIndex, event.startDayOfWeek, event.endDayOfWeek);
+                if (!isDayInRange) return false;
 
                 if (!event.isMultiDay) {
                   // Single day events
@@ -72,12 +91,10 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 } else if (dayIndex === event.endDayOfWeek) {
                   // Last day: show at 6 AM
                   return currentHour === 6;
-                } else if (dayIndex > event.startDayOfWeek && dayIndex < event.endDayOfWeek) {
+                } else {
                   // Middle days: show at 6 AM
                   return currentHour === 6;
                 }
-                
-                return false;
               });
 
               // Calculate layout for overlapping events
