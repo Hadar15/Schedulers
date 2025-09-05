@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import React from 'react';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import CalendarHeader from './CalendarHeader';
 import CalendarGrid from './CalendarGrid';
 import EventModal from './EventModal';
@@ -21,67 +22,30 @@ function WeeklyScheduler() {
     endTime?: string;
   }>({});
 
-  // Load data from localStorage on mount or set default events
+  // Subscribe to Firestore events and todos collections
   useEffect(() => {
-    const savedEvents = localStorage.getItem('scheduler-events');
-    const savedTodos = localStorage.getItem('scheduler-todos');
-    
-    if (savedEvents) {
-      setEvents(JSON.parse(savedEvents));
-    } else {
-      // Add some default events if none exist
-      const defaultEvents: Event[] = [
-        {
-          id: generateId(),
-          title: 'Team Meeting',
-          description: 'Daily standup with the team',
-          startDayOfWeek: 1, // Tuesday
-          endDayOfWeek: 1,
-          startTime: '09:00',
-          endTime: '10:00',
-          color: 'blue',
-          isMultiDay: false
-        },
-        {
-          id: generateId(),
-          title: 'Training Workshop',
-          description: 'Comprehensive training session',
-          startDayOfWeek: 1, // Tuesday
-          endDayOfWeek: 3,   // Thursday
-          startTime: '14:00',
-          endTime: '11:00',
-          color: 'red',
-          isMultiDay: true
-        },
-        {
-          id: generateId(),
-          title: 'Project Planning',
-          description: 'Multi-day planning session',
-          startDayOfWeek: 2, // Wednesday
-          endDayOfWeek: 4,   // Friday
-          startTime: '09:00',
-          endTime: '16:00',
-          color: 'green',
-          isMultiDay: true
-        },
-        {
-          id: generateId(),
-          title: 'Client Meeting',
-          description: 'Product review',
-          startDayOfWeek: 3, // Thursday
-          endDayOfWeek: 3,
-          startTime: '10:00',
-          endTime: '11:00',
-          color: 'blue',
-          isMultiDay: false
-        }
-      ];
-      setEvents(defaultEvents);
-    }
+    const unsubscribeEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
+      const eventsList: Event[] = [];
+      snapshot.forEach((doc) => {
+        eventsList.push({ id: doc.id, ...doc.data() } as Event);
+      });
+      setEvents(eventsList);
+    });
 
-    if (savedTodos) {
-      setTodos(JSON.parse(savedTodos));
-    }
+    // Subscribe to Firestore todos collection
+    const unsubscribeTodos = onSnapshot(collection(db, 'todos'), (snapshot) => {
+      const todosList: TodoItem[] = [];
+      snapshot.forEach((doc) => {
+        todosList.push({ id: doc.id, ...doc.data() } as TodoItem);
+      });
+      setTodos(todosList);
+    });
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribeEvents();
+      unsubscribeTodos();
+    };
   }, []);
 
   // Save events to localStorage
@@ -116,60 +80,59 @@ function WeeklyScheduler() {
     setIsModalOpen(true);
   };
 
-  const handleSaveEvent = (eventData: Omit<Event, 'id'>) => {
+  const handleSaveEvent = async (eventData: Omit<Event, 'id'>) => {
     if (editingEvent) {
-      setEvents(events.map((event: Event) => 
-        event.id === editingEvent.id 
-          ? { ...eventData, id: editingEvent.id }
-          : event
-      ));
+      // Update existing event
+      await updateDoc(doc(db, 'events', editingEvent.id), eventData);
     } else {
-      const newEvent: Event = {
-        ...eventData,
-        id: generateId()
-      };
-      setEvents([...events, newEvent]);
+      // Add new event
+      await addDoc(collection(db, 'events'), eventData);
     }
     setIsModalOpen(false);
     setEditingEvent(null);
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (editingEvent) {
-      setEvents(events.filter((event: Event) => event.id !== editingEvent.id));
+      await deleteDoc(doc(db, 'events', editingEvent.id));
       setIsModalOpen(false);
       setEditingEvent(null);
     }
   };
 
-  const handleUpdateEvent = (id: string, updates: Partial<Event>) => {
-    setEvents(events.map(event => 
-      event.id === id ? { ...event, ...updates } : event
-    ));
+  const handleUpdateEvent = async (id: string, updates: Partial<Event>) => {
+    await updateDoc(doc(db, 'events', id), updates);
   };
 
-  const handleAddTodo = (text: string) => {
-    const newTodo: TodoItem = {
-      id: generateId(),
+  const handleAddTodo = async (text: string) => {
+    const newTodo: Omit<TodoItem, 'id'> = {
       text,
       completed: false,
       createdAt: new Date().toISOString()
     };
-    setTodos([...todos, newTodo]);
+    await addDoc(collection(db, 'todos'), newTodo);
   };
 
-  const handleToggleTodo = (id: string) => {
-    setTodos(todos.map((todo: TodoItem) => 
-      todo.id === id ? { ...todo, completed: !todo.completed } : todo
-    ));
+  const handleToggleTodo = async (id: string) => {
+    const todoRef = doc(db, 'todos', id);
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+      await updateDoc(todoRef, {
+        completed: !todo.completed
+      });
+    }
   };
 
-  const handleDeleteTodo = (id: string) => {
-    setTodos(todos.filter((todo: TodoItem) => todo.id !== id));
+  const handleDeleteTodo = async (id: string) => {
+    await deleteDoc(doc(db, 'todos', id));
   };
 
-  const handleClearCompleted = () => {
-    setTodos(todos.filter((todo: TodoItem) => !todo.completed));
+  const handleClearCompleted = async () => {
+    const completedTodos = todos.filter(todo => todo.completed);
+    // Delete completed todos one by one
+    for (const todo of completedTodos) {
+      await deleteDoc(doc(db, 'todos', todo.id));
+    }
   };
 
   return (
