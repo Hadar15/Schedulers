@@ -1,0 +1,79 @@
+import React, { useState } from 'react';
+import { Event, EventPosition } from '../types';
+import { getColorClasses } from '../utils';
+
+interface EventBlockProps {
+  event: Event;
+  position: EventPosition;
+  onEdit: (event: Event) => void;
+  currentTimeSlot: string;
+}
+
+const EventBlock: React.FC<EventBlockProps> = ({
+  event,
+  position,
+  onEdit,
+  currentTimeSlot
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const colorClasses = getColorClasses(event.color);
+  
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit(event);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const startHour = parseInt(event.startTime.split(':')[0]);
+  const currentHour = parseInt(currentTimeSlot.split(':')[0]);
+  const endHour = parseInt(event.endTime.split(':')[0]);
+  const duration = endHour - startHour;
+  const height = `${duration * 4}rem`; // 4rem per hour
+
+  const style = {
+    left: `${position.left}%`,
+    width: `${position.width}%`,
+    height,
+    zIndex: position.zIndex
+  };
+
+  // Only render if this is the start hour for this event
+  if (currentHour !== startHour) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`absolute rounded-md shadow-sm border transition-all duration-200 cursor-pointer hover:shadow-md ${
+        colorClasses.bg
+      } ${colorClasses.border} ${
+        isDragging ? 'scale-105 shadow-lg' : ''
+      }`}
+      style={style}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      onMouseUp={() => setIsDragging(false)}
+    >
+      <div className="p-2 h-full overflow-hidden">
+        <div className={`font-semibold text-sm leading-tight ${colorClasses.text}`}>
+          {event.title}
+        </div>
+        <div className={`text-xs mt-1 opacity-75 ${colorClasses.text}`}>
+          {event.startTime} - {event.endTime}
+        </div>
+        {event.description && (
+          <div className={`text-xs mt-1 opacity-60 ${colorClasses.text} line-clamp-2`}>
+            {event.description}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EventBlock;
